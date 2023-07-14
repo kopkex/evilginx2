@@ -1,0 +1,28 @@
+package database
+
+import (
+	"context"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+type Database struct {
+	Client   *mongo.Client
+	Context  context.Context
+}
+
+func NewDatabase(ctx context.Context, uri string) (*Database, error) {
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		return nil, err
+	}
+
+	db := &Database{
+		Client:  client,
+		Context: ctx,
+	}
+
+	return db, nil
+}
+
+// Rest of the session-related functions go here, replaced with MongoDB equivalents.
