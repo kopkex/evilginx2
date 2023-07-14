@@ -1,32 +1,28 @@
 package database
 
 import (
-	"encoding/json"
-	"strconv"
-
-	"github.com/tidwall/buntdb"
+	"context"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Database struct {
-	path string
-	db   *buntdb.DB
+	Client   *mongo.Client
+	Context  context.Context
 }
 
-func NewDatabase(path string) (*Database, error) {
-	var err error
-	d := &Database{
-		path: path,
-	}
-
-	d.db, err = buntdb.Open(path)
+func NewDatabase(ctx context.Context, uri string) (*Database, error) {
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
 		return nil, err
 	}
 
-	d.sessionsInit()
+	db := &Database{
+		Client:  client,
+		Context: ctx,
+	}
 
-	d.db.Shrink()
-	return d, nil
+	return db, nil
 }
 
 func (d *Database) CreateSession(sid string, phishlet string, landing_url string, useragent string, remote_addr string) error {
@@ -88,7 +84,7 @@ func (d *Database) DeleteSessionById(id int) error {
 }
 
 func (d *Database) Flush() {
-	d.db.Shrink()
+	d.Client.Database("database").Collection("sessions").Drop(d.Context)
 }
 
 func (d *Database) genIndex(table_name string, id int) string {
