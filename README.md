@@ -1,11 +1,11 @@
 <p align="center">
-  <img alt="Evilginx2 Logo" src="https://raw.githubusercontent.com/kgretzky/evilginx2/master/media/img/evilginx2-logo-512.png" height="160" />
+  <img alt="Evilginx3 Logo" src="https://raw.githubusercontent.com/kgretzky/evilginx2/master/media/img/evilginx2-logo-512.png" height="160" />
   <p align="center">
-    <img alt="Evilginx2 Title" src="https://raw.githubusercontent.com/kgretzky/evilginx2/master/media/img/evilginx2-title-black-512.png" height="60" />
+    <img alt="Evilginx3 Title" src="https://raw.githubusercontent.com/kgretzky/evilginx2/master/media/img/evilginx2-title-black-512.png" height="60" />
   </p>
 </p>
 
-# Evilginx 3.0
+# Evilginx 3.1
 
 **Evilginx** is a man-in-the-middle attack framework used for phishing login credentials along with session cookies, which in turn allows to bypass 2-factor authentication protection.
 
@@ -47,7 +47,7 @@ If you want to learn more about reverse proxy phishing, I've published extensive
 
 [Evilginx 2.4 - Gone Phishing](https://breakdev.org/evilginx-2-4-gone-phishing/)
 
-[Evilginx 3.0](https://breakdev.org/evilginx-3-0-evilginx-mastery/)
+[Evilginx 3.1](https://breakdev.org/evilginx-3-0-evilginx-mastery/)
 
 ## Help
 
