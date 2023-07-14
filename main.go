@@ -122,7 +122,7 @@ func main() {
 	}
 	cfg.SetRedirectorsDir(*redirectors_dir)
 
-	db, err := database.NewDatabase(filepath.Join(*cfg_dir, "data.db"))
+	db, err := database.NewDatabase(filepath.Join(*cfg_dir, "data"))
 	if err != nil {
 		log.Fatal("database: %v", err)
 		return

